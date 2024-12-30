@@ -21,15 +21,42 @@ public class CharacterService {
   @Autowired
   private RestTemplate restTemplate;
 
-  public void fetchAndSaveCharacters() {
+  public void fetchAndSaveCharacters(int totalItemsToFetch) {
     String apiUrl = "https://dragonball-api.com/api/characters";
-    ResponseEntity<ApiResponse> response = restTemplate.getForEntity(apiUrl, ApiResponse.class);
+    int page = 1; 
+    int itemsPerPage = 10; // Límite por página
+    int fetchedItems = 0; // Contador de personajes obtenidos
+    boolean hasMoreItems = true;
 
-    if (response.getBody() != null && response.getBody().getItems() != null) {
-      List<Character> characters = response.getBody().getItems();
-      characterRepository.saveAll(characters);
+    while (hasMoreItems) {
+        // Construir URL con paginación y límite
+        String paginatedUrl = apiUrl + "?page=" + page + "&limit=" + itemsPerPage;
+
+        // Realizar la solicitud
+        ResponseEntity<ApiResponse> response = restTemplate.getForEntity(paginatedUrl, ApiResponse.class);
+
+        if (response.getBody() != null && response.getBody().getItems() != null) {
+            List<Character> characters = response.getBody().getItems();
+
+            // Calcular cuántos personajes necesitamos de esta página
+            int remainingItems = totalItemsToFetch - fetchedItems;
+            int itemsToSave = Math.min(remainingItems, characters.size());
+
+            // Guardar solo los personajes necesarios
+            characterRepository.saveAll(characters.subList(0, itemsToSave));
+            fetchedItems += itemsToSave;
+
+            // Verificar si alcanzamos el total deseado
+            if (fetchedItems >= totalItemsToFetch || response.getBody().getLinks().getNext() == null) {
+                hasMoreItems = false; // Detener el bucle
+            } else {
+                page++; // Avanzar a la siguiente página
+            }
+        } else {
+            hasMoreItems = false; // Detener si la respuesta está vacía
+        }
     }
-  }
+}
 
   public List<Character> getAllCharacters() {
     return characterRepository.findAll();
